@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>8Bit Piano Studio</title>
+    <title>8Bit Piano & Drum Studio</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
@@ -14,13 +14,15 @@
         .key-white:active, .key-white.active { background: #38bdf8; transform: translateY(2px); box-shadow: 0 2px 0 #0f172a; }
         .key-black { background: linear-gradient(to bottom, #1e293b 0%, #0f172a 100%); border: 2px solid #000000; border-radius: 0 0 4px 4px; box-shadow: 0 3px 0 #000000; z-index: 10; }
         .key-black:active, .key-black.active { background: #f43f5e; transform: translateY(2px); box-shadow: 0 1px 0 #000000; }
+        .drum-pad { transition: all 0.05s ease; }
+        .drum-pad:active, .drum-pad.active { transform: scale(0.95); filter: brightness(1.3); }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between select-none overflow-x-hidden">
     <header class="p-4 bg-slate-900 border-b-4 border-slate-800 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
             <div class="w-8 h-8 bg-cyan-500 rounded flex items-center justify-center text-slate-950 font-bold text-xl shadow-[2px_2px_0_#000]">8</div>
-            <h1 class="text-xs md:text-sm text-cyan-400 tracking-wider">8BIT PIANO STUDIO</h1>
+            <h1 class="text-xs md:text-sm text-cyan-400 tracking-wider">8BIT PIANO & DRUM STUDIO</h1>
         </div>
 
         <div class="flex flex-wrap items-center gap-3 text-[10px]">
@@ -42,14 +44,14 @@
             <div class="flex items-center gap-2">
                 <button id="rec-btn" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded font-bold flex items-center gap-2 transition-all">
                     <span id="rec-dot" class="w-2.5 h-2.5 rounded-full bg-white"></span>
-                    <span id="rec-text">REC</span>
+                    <span id="rec-text">REC (WAV)</span>
                 </button>
             </div>
         </div>
     </header>
 
-    <main class="flex-1 flex flex-col justify-center items-center p-4 gap-6 max-w-7xl mx-auto w-full">
-        <div class="w-full bg-slate-900/80 p-4 rounded-xl border-2 border-slate-800 flex flex-wrap items-center justify-between gap-4">
+    <main class="flex-1 flex flex-col justify-center items-center p-4 gap-4 max-w-7xl mx-auto w-full">
+        <div class="w-full bg-slate-900/80 p-3 rounded-xl border-2 border-slate-800 flex flex-wrap items-center justify-between gap-4">
             <div class="flex items-center gap-2">
                 <span class="text-[10px] text-slate-400">DEMO SONG:</span>
                 <select id="song-select" class="bg-slate-800 border border-slate-700 text-[10px] p-2 rounded text-cyan-300 focus:outline-none">
@@ -65,18 +67,55 @@
             </div>
         </div>
 
-        <div class="w-full bg-slate-900 p-4 rounded-xl border-2 border-slate-800 text-center">
+        <div class="w-full bg-slate-900 p-3 rounded-xl border-2 border-slate-800 text-center">
             <p class="text-[10px] text-slate-400 mb-2">KEYBOARD MAPPING (OCTAVE <span id="map-octave">4</span>)</p>
             <div class="flex flex-wrap justify-center gap-2 text-[9px] text-slate-300">
                 <span class="bg-slate-800 px-2 py-1 rounded border border-slate-700"><b class="text-amber-400">WHITE:</b> A S D F G H J K L ; '</span>
                 <span class="bg-slate-800 px-2 py-1 rounded border border-slate-700"><b class="text-rose-400">BLACK:</b> W E T Y U O P</span>
-                <span class="bg-slate-800 px-2 py-1 rounded border border-slate-700"><b class="text-cyan-400">SHIFT OCTAVE:</b> ◀ / ▶ ARROWS</span>
+                <span class="bg-slate-800 px-2 py-1 rounded border border-slate-700"><b class="text-cyan-400">OCTAVE:</b> ◀ / ▶</span>
             </div>
         </div>
 
-        <div class="w-full relative bg-slate-900 p-4 rounded-2xl border-4 border-slate-800 shadow-2xl">
+        <div class="w-full relative bg-slate-900 p-3 rounded-2xl border-4 border-slate-800 shadow-2xl">
             <div id="piano-scroll" class="overflow-x-auto no-scrollbar py-2 px-1">
-                <div id="keyboard" class="relative flex h-52 min-w-[1850px] items-start justify-start select-none"></div>
+                <div id="keyboard" class="relative flex h-48 min-w-[1850px] items-start justify-start select-none"></div>
+            </div>
+        </div>
+
+        <div class="w-full bg-slate-900 p-4 rounded-2xl border-4 border-slate-800 shadow-2xl">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-[10px] text-amber-400 font-bold">8BIT DRUM PADS</span>
+                <span class="text-[9px] text-slate-400">KEYS: Z X C V B N M</span>
+            </div>
+            <div id="drum-container" class="grid grid-cols-7 gap-2 md:gap-3">
+                <button data-drum="0" class="drum-pad bg-red-950 border-2 border-red-600 hover:bg-red-900 p-3 rounded-xl flex flex-col items-center justify-center gap-1">
+                    <span class="text-[11px] font-bold text-red-400">KICK</span>
+                    <span class="text-[9px] bg-red-900/80 px-2 py-0.5 rounded text-white">Z</span>
+                </button>
+                <button data-drum="1" class="drum-pad bg-amber-950 border-2 border-amber-600 hover:bg-amber-900 p-3 rounded-xl flex flex-col items-center justify-center gap-1">
+                    <span class="text-[11px] font-bold text-amber-400">SNARE</span>
+                    <span class="text-[9px] bg-amber-900/80 px-2 py-0.5 rounded text-white">X</span>
+                </button>
+                <button data-drum="2" class="drum-pad bg-yellow-950 border-2 border-yellow-600 hover:bg-yellow-900 p-3 rounded-xl flex flex-col items-center justify-center gap-1">
+                    <span class="text-[11px] font-bold text-yellow-400">CLOSED HH</span>
+                    <span class="text-[9px] bg-yellow-900/80 px-2 py-0.5 rounded text-white">C</span>
+                </button>
+                <button data-drum="3" class="drum-pad bg-emerald-950 border-2 border-emerald-600 hover:bg-emerald-900 p-3 rounded-xl flex flex-col items-center justify-center gap-1">
+                    <span class="text-[11px] font-bold text-emerald-400">OPEN HH</span>
+                    <span class="text-[9px] bg-emerald-900/80 px-2 py-0.5 rounded text-white">V</span>
+                </button>
+                <button data-drum="4" class="drum-pad bg-cyan-950 border-2 border-cyan-600 hover:bg-cyan-900 p-3 rounded-xl flex flex-col items-center justify-center gap-1">
+                    <span class="text-[11px] font-bold text-cyan-400">LOW TOM</span>
+                    <span class="text-[9px] bg-cyan-900/80 px-2 py-0.5 rounded text-white">B</span>
+                </button>
+                <button data-drum="5" class="drum-pad bg-blue-950 border-2 border-blue-600 hover:bg-blue-900 p-3 rounded-xl flex flex-col items-center justify-center gap-1">
+                    <span class="text-[11px] font-bold text-blue-400">HI TOM</span>
+                    <span class="text-[9px] bg-blue-900/80 px-2 py-0.5 rounded text-white">N</span>
+                </button>
+                <button data-drum="6" class="drum-pad bg-purple-950 border-2 border-purple-600 hover:bg-purple-900 p-3 rounded-xl flex flex-col items-center justify-center gap-1">
+                    <span class="text-[11px] font-bold text-purple-400">CRASH</span>
+                    <span class="text-[9px] bg-purple-900/80 px-2 py-0.5 rounded text-white">M</span>
+                </button>
             </div>
         </div>
     </main>
@@ -91,13 +130,14 @@
 
         let audioCtx = null;
         let masterGain = null;
-        let mediaStreamDest = null;
-        let mediaRecorder = null;
-        let recordedChunks = [];
+        let recorderNode = null;
+        let recordedBuffersLeft = [];
+        let recordedBuffersRight = [];
         let isRecording = false;
 
         let bassBuffer = null;
         let pulseBuffer = null;
+        let drumBuffer = null;
 
         let currentToneMode = 'bass';
         let currentOctave = 4;
@@ -121,7 +161,18 @@
         }
 
         const keyMapWhite = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'"];
-        const keyMapBlack = ['w', 'e', null, 't', 'y', 'u', null, 'o', 'p'];
+        const keyMapBlack = ['w', 'e', 't', 'y', 'u', 'o', 'p'];
+        const drumKeys = ['z', 'x', 'c', 'v', 'b', 'n', 'm'];
+
+        const DRUM_PARAMS = [
+            { rate: 8.0, duration: 0.12, gain: 1.0 },
+            { rate: 12.0, duration: 0.15, gain: 0.9 },
+            { rate: 24.0, duration: 0.05, gain: 0.7 },
+            { rate: 18.0, duration: 0.25, gain: 0.7 },
+            { rate: 9.5, duration: 0.18, gain: 0.9 },
+            { rate: 14.0, duration: 0.15, gain: 0.9 },
+            { rate: 20.0, duration: 0.40, gain: 0.8 }
+        ];
 
         function initAudio() {
             if (audioCtx) return;
@@ -129,10 +180,7 @@
             audioCtx = new AudioContext();
             masterGain = audioCtx.createGain();
             masterGain.gain.value = 0.75;
-
-            mediaStreamDest = audioCtx.createMediaStreamDestination();
             masterGain.connect(audioCtx.destination);
-            masterGain.connect(mediaStreamDest);
 
             loadBuffers();
         }
@@ -148,8 +196,10 @@
                     const tri = phase < 0.5 ? (4 * phase - 1) : (3 - 4 * phase);
                     const sq = phase < 0.5 ? 1 : -1;
                     data[i] = (tri * 0.7 + sq * 0.3) * 0.8;
-                } else {
+                } else if (mode === 'pulse') {
                     data[i] = (phase < 0.25 ? 1 : -1) * 0.7;
+                } else {
+                    data[i] = (Math.random() * 2 - 1) * 0.8;
                 }
             }
             return buffer;
@@ -179,6 +229,18 @@
                 }
             } catch (e) {
                 pulseBuffer = createSynthBuffer(audioCtx, BASE_FREQ_PULSE, 1.0, 'pulse');
+            }
+
+            try {
+                const r3 = await fetch('drum.wav');
+                if (r3.ok) {
+                    const ab3 = await r3.arrayBuffer();
+                    drumBuffer = await audioCtx.decodeAudioData(ab3);
+                } else {
+                    drumBuffer = createSynthBuffer(audioCtx, 100, 2.0, 'noise');
+                }
+            } catch (e) {
+                drumBuffer = createSynthBuffer(audioCtx, 100, 2.0, 'noise');
             }
         }
 
@@ -244,6 +306,40 @@
             highlightKey(keyNum, false);
         }
 
+        function playDrum(index) {
+            initAudio();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            if (!drumBuffer || !audioCtx) return;
+
+            const param = DRUM_PARAMS[index] || DRUM_PARAMS[0];
+            try {
+                const src = audioCtx.createBufferSource();
+                src.buffer = drumBuffer;
+                src.playbackRate.setValueAtTime(param.rate, audioCtx.currentTime);
+
+                const gain = audioCtx.createGain();
+                const now = audioCtx.currentTime;
+
+                gain.gain.setValueAtTime(param.gain, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + param.duration);
+
+                src.connect(gain);
+                gain.connect(masterGain);
+                src.start(now);
+                src.stop(now + param.duration + 0.05);
+
+                highlightDrum(index);
+            } catch (e) {}
+        }
+
+        function highlightDrum(index) {
+            const pad = document.querySelector(`[data-drum="${index}"]`);
+            if (pad) {
+                pad.classList.add('active');
+                setTimeout(() => pad.classList.remove('active'), 120);
+            }
+        }
+
         function renderKeyboard() {
             const kb = document.getElementById('keyboard');
             kb.innerHTML = '';
@@ -261,7 +357,7 @@
                     el.innerHTML = `<span>${k.noteName}</span><span class="text-[7px] text-slate-500">${k.octave}</span>`;
                     whiteOffset++;
                 } else {
-                    el.className = 'key-black absolute top-0 h-32 cursor-pointer flex flex-col justify-end items-center pb-2 text-[7px] text-slate-200 font-bold';
+                    el.className = 'key-black absolute top-0 h-28 cursor-pointer flex flex-col justify-end items-center pb-2 text-[7px] text-slate-200 font-bold';
                     el.style.width = `${whiteWidth * 0.65}px`;
                     el.style.left = `${(whiteOffset - 1) * whiteWidth + (whiteWidth * 0.68)}px`;
                     el.dataset.keyNum = k.keyNum;
@@ -424,47 +520,112 @@
             document.getElementById('stop-demo-btn').classList.add('hidden');
         }
 
+        function audioBufferToWav(buffer) {
+            const numChannels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+            const format = 1;
+            const bitDepth = 16;
+            const bytesPerSample = bitDepth / 8;
+            const blockAlign = numChannels * bytesPerSample;
+            const length = buffer.length;
+            const dataByteLength = length * blockAlign;
+            const headerByteLength = 44;
+            const totalByteLength = headerByteLength + dataByteLength;
+
+            const arrayBuffer = new ArrayBuffer(totalByteLength);
+            const view = new DataView(arrayBuffer);
+
+            function writeString(view, offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + dataByteLength, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, format, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * blockAlign, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, bitDepth, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, dataByteLength, true);
+
+            let offset = 44;
+            for (let i = 0; i < length; i++) {
+                for (let channel = 0; channel < numChannels; channel++) {
+                    let sample = buffer.getChannelData(channel)[i];
+                    sample = Math.max(-1, Math.min(1, sample));
+                    sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+                    view.setInt16(offset, sample, true);
+                    offset += 2;
+                }
+            }
+            return new Blob([arrayBuffer], { type: 'audio/wav' });
+        }
+
         function toggleRecording() {
             initAudio();
             if (!isRecording) {
-                recordedChunks = [];
-                const options = { mimeType: 'audio/webm' };
-                try {
-                    mediaRecorder = new MediaRecorder(mediaStreamDest.stream, options);
-                } catch (e) {
-                    mediaRecorder = new MediaRecorder(mediaStreamDest.stream);
-                }
+                recordedBuffersLeft = [];
+                recordedBuffersRight = [];
 
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) recordedChunks.push(e.data);
+                recorderNode = audioCtx.createScriptProcessor(4096, 2, 2);
+                recorderNode.onaudioprocess = (e) => {
+                    if (!isRecording) return;
+                    const left = e.inputBuffer.getChannelData(0);
+                    const right = e.inputBuffer.getChannelData(1);
+                    recordedBuffersLeft.push(new Float32Array(left));
+                    recordedBuffersRight.push(new Float32Array(right));
                 };
 
-                mediaRecorder.onstop = () => {
-                    const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-                    const url = URL.createObjectURL(blob);
+                masterGain.connect(recorderNode);
+                recorderNode.connect(audioCtx.destination);
+
+                isRecording = true;
+                document.getElementById('rec-btn').classList.replace('bg-red-600', 'bg-amber-600');
+                document.getElementById('rec-text').innerText = 'STOP (WAV)';
+                document.getElementById('rec-dot').classList.add('animate-ping');
+            } else {
+                isRecording = false;
+                if (recorderNode) {
+                    masterGain.disconnect(recorderNode);
+                    recorderNode.disconnect();
+                }
+
+                document.getElementById('rec-btn').classList.replace('bg-amber-600', 'bg-red-600');
+                document.getElementById('rec-text').innerText = 'REC (WAV)';
+                document.getElementById('rec-dot').classList.remove('animate-ping');
+
+                const totalSamples = recordedBuffersLeft.reduce((acc, curr) => acc + curr.length, 0);
+                if (totalSamples > 0) {
+                    const recordedBuffer = audioCtx.createBuffer(2, totalSamples, audioCtx.sampleRate);
+                    const leftChan = recordedBuffer.getChannelData(0);
+                    const rightChan = recordedBuffer.getChannelData(1);
+                    let offset = 0;
+                    for (let i = 0; i < recordedBuffersLeft.length; i++) {
+                        leftChan.set(recordedBuffersLeft[i], offset);
+                        rightChan.set(recordedBuffersRight[i], offset);
+                        offset += recordedBuffersLeft[i].length;
+                    }
+
+                    const wavBlob = audioBufferToWav(recordedBuffer);
+                    const url = URL.createObjectURL(wavBlob);
                     const a = document.createElement('a');
                     a.style.display = 'none';
                     a.href = url;
-                    a.download = `8bit_piano_record_${Date.now()}.webm`;
+                    a.download = `8bit_piano_drum_record_${Date.now()}.wav`;
                     document.body.appendChild(a);
                     a.click();
                     setTimeout(() => {
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
                     }, 100);
-                };
-
-                mediaRecorder.start();
-                isRecording = true;
-                document.getElementById('rec-btn').classList.replace('bg-red-600', 'bg-amber-600');
-                document.getElementById('rec-text').innerText = 'STOP';
-                document.getElementById('rec-dot').classList.add('animate-ping');
-            } else {
-                mediaRecorder.stop();
-                isRecording = false;
-                document.getElementById('rec-btn').classList.replace('bg-amber-600', 'bg-red-600');
-                document.getElementById('rec-text').innerText = 'REC';
-                document.getElementById('rec-dot').classList.remove('animate-ping');
+                }
             }
         }
 
@@ -500,6 +661,12 @@
                 return;
             }
 
+            const drumIndex = drumKeys.indexOf(e.key.toLowerCase());
+            if (drumIndex !== -1) {
+                playDrum(drumIndex);
+                return;
+            }
+
             const noteKey = getNoteFromKeyboardKey(e.key);
             if (noteKey && !activeKeys.has(e.key)) {
                 activeKeys.add(e.key);
@@ -513,6 +680,18 @@
                 activeKeys.delete(e.key);
                 stopNote(noteKey.keyNum);
             }
+        });
+
+        document.querySelectorAll('.drum-pad').forEach(pad => {
+            const index = parseInt(pad.dataset.drum, 10);
+            pad.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                playDrum(index);
+            });
+            pad.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                playDrum(index);
+            });
         });
 
         document.getElementById('tone-select').addEventListener('change', (e) => {
