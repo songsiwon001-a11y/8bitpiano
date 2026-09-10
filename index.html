@@ -26,11 +26,18 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-3 text-[10px]">
+            <div id="midi-status-btn" class="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1.5 rounded border border-slate-700 cursor-pointer hover:bg-slate-700 transition-all">
+                <span id="midi-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                <span id="midi-text" class="text-slate-300">MIDI: READY</span>
+            </div>
+
             <div class="flex items-center gap-2 bg-slate-800 p-1.5 rounded border border-slate-700">
                 <span class="text-slate-400 text-[9px]">음색:</span>
                 <select id="tone-select" class="bg-slate-900 border border-slate-700 text-[10px] py-1 px-2 rounded text-amber-400 font-bold focus:outline-none cursor-pointer">
                     <option value="bass">묵직한 베이스</option>
                     <option value="pulse">통통 튀는 펄스 전자음</option>
+                    <option value="retro">옛날게임 소리</option>
+                    <option value="retro2">옛날게임 소리 2</option>
                 </select>
             </div>
 
@@ -125,24 +132,25 @@
     </footer>
 
     <script>
-        const BASE_FREQ_BASS = 12.5;
-        const BASE_FREQ_PULSE = 26.0;
-
         let audioCtx = null;
         let masterGain = null;
         let recorderNode = null;
-        let recordedBuffersLeft = [];
-        let recordedBuffersRight = [];
+        let recordedChunksL = [];
+        let recordedChunksR = [];
         let isRecording = false;
 
         let bassBuffer = null;
         let pulseBuffer = null;
+        let retroBuffer = null;
+        let retro2Buffer = null;
         let drumBuffer = null;
 
         let currentToneMode = 'bass';
         let currentOctave = 4;
         let isDemoPlaying = false;
         let demoTimeouts = [];
+
+        let midiAccess = null;
 
         const activeVoices = new Map();
         const activeKeys = new Set();
@@ -183,65 +191,107 @@
             masterGain.connect(audioCtx.destination);
 
             loadBuffers();
+            initMIDI();
         }
 
-        function createSynthBuffer(ctx, freq, duration, mode) {
-            const sampleRate = ctx.sampleRate;
-            const buffer = ctx.createBuffer(1, sampleRate * duration, sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let i = 0; i < data.length; i++) {
-                const t = i / sampleRate;
-                const phase = (t * freq) % 1;
-                if (mode === 'bass') {
-                    const tri = phase < 0.5 ? (4 * phase - 1) : (3 - 4 * phase);
-                    const sq = phase < 0.5 ? 1 : -1;
-                    data[i] = (tri * 0.7 + sq * 0.3) * 0.8;
-                } else if (mode === 'pulse') {
-                    data[i] = (phase < 0.25 ? 1 : -1) * 0.7;
-                } else {
-                    data[i] = (Math.random() * 2 - 1) * 0.8;
+        function initMIDI() {
+            if (navigator.requestMIDIAccess) {
+                navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
+            } else {
+                updateMIDIStatus('unsupported');
+            }
+        }
+
+        function onMIDISuccess(midi) {
+            midiAccess = midi;
+            let inputs = midiAccess.inputs.values();
+            for (let input of inputs) {
+                input.onmidimessage = handleMIDIMessage;
+            }
+
+            midiAccess.onstatechange = (e) => {
+                if (e.port.type === 'input') {
+                    if (e.port.state === 'connected') {
+                        e.port.onmidimessage = handleMIDIMessage;
+                    }
+                    refreshMIDIDevices();
+                }
+            };
+
+            refreshMIDIDevices();
+        }
+
+        function onMIDIFailure() {
+            updateMIDIStatus('denied');
+        }
+
+        function refreshMIDIDevices() {
+            if (!midiAccess) return;
+            let inputs = Array.from(midiAccess.inputs.values());
+            if (inputs.length > 0) {
+                updateMIDIStatus('connected', inputs[0].name);
+            } else {
+                updateMIDIStatus('ready');
+            }
+        }
+
+        function updateMIDIStatus(status, deviceName = '') {
+            const dot = document.getElementById('midi-dot');
+            const text = document.getElementById('midi-text');
+
+            if (status === 'connected') {
+                dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+                text.innerText = `MIDI: ${deviceName.length > 12 ? deviceName.substring(0, 10) + '..' : deviceName}`;
+                text.className = 'text-emerald-400 font-bold';
+            } else if (status === 'denied') {
+                dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+                text.innerText = 'MIDI: DENIED';
+                text.className = 'text-rose-400';
+            } else if (status === 'unsupported') {
+                dot.className = 'w-2 h-2 rounded-full bg-slate-600';
+                text.innerText = 'MIDI: N/A';
+                text.className = 'text-slate-500';
+            } else {
+                dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+                text.innerText = 'MIDI: READY';
+                text.className = 'text-amber-400';
+            }
+        }
+
+        function handleMIDIMessage(event) {
+            const [status, note, velocity] = event.data;
+            const command = status >> 4;
+
+            if (command === 9 && velocity > 0) {
+                const keyIndex = note - 21;
+                if (keyIndex >= 0 && keyIndex < 88) {
+                    playNote(keys88[keyIndex]);
+                }
+            } else if (command === 8 || (command === 9 && velocity === 0)) {
+                const keyIndex = note - 21;
+                if (keyIndex >= 0 && keyIndex < 88) {
+                    stopNote(keys88[keyIndex].keyNum);
                 }
             }
-            return buffer;
         }
 
         async function loadBuffers() {
-            try {
-                let r1 = await fetch('bass_tone.wav');
-                if (!r1.ok) r1 = await fetch('bass.wav');
-                if (r1.ok) {
-                    const ab1 = await r1.arrayBuffer();
-                    bassBuffer = await audioCtx.decodeAudioData(ab1);
-                } else {
-                    bassBuffer = createSynthBuffer(audioCtx, BASE_FREQ_BASS, 2.0, 'bass');
+            const fetchAndDecode = async (url) => {
+                try {
+                    const res = await fetch(url);
+                    if (!res.ok) return null;
+                    const ab = await res.arrayBuffer();
+                    return await audioCtx.decodeAudioData(ab);
+                } catch (e) {
+                    return null;
                 }
-            } catch (e) {
-                bassBuffer = createSynthBuffer(audioCtx, BASE_FREQ_BASS, 2.0, 'bass');
-            }
+            };
 
-            try {
-                const r2 = await fetch('mane_pulse.wav');
-                if (r2.ok) {
-                    const ab2 = await r2.arrayBuffer();
-                    pulseBuffer = await audioCtx.decodeAudioData(ab2);
-                } else {
-                    pulseBuffer = createSynthBuffer(audioCtx, BASE_FREQ_PULSE, 1.0, 'pulse');
-                }
-            } catch (e) {
-                pulseBuffer = createSynthBuffer(audioCtx, BASE_FREQ_PULSE, 1.0, 'pulse');
-            }
-
-            try {
-                const r3 = await fetch('drum.wav');
-                if (r3.ok) {
-                    const ab3 = await r3.arrayBuffer();
-                    drumBuffer = await audioCtx.decodeAudioData(ab3);
-                } else {
-                    drumBuffer = createSynthBuffer(audioCtx, 100, 2.0, 'noise');
-                }
-            } catch (e) {
-                drumBuffer = createSynthBuffer(audioCtx, 100, 2.0, 'noise');
-            }
+            bassBuffer = await fetchAndDecode('bass_tone.wav') || await fetchAndDecode('bass.wav');
+            pulseBuffer = await fetchAndDecode('mane_pulse.wav') || await fetchAndDecode('pulse.wav');
+            retroBuffer = await fetchAndDecode('pulse_25%.wav') || await fetchAndDecode('retro.wav');
+            retro2Buffer = await fetchAndDecode('pulse_50%.wav') || await fetchAndDecode('retro2.wav');
+            drumBuffer = await fetchAndDecode('drum.wav');
         }
 
         function playNote(keyObj, modeOverride = null) {
@@ -253,11 +303,57 @@
 
             if (activeVoices.has(voiceKey)) stopNote(keyObj.keyNum, mode);
 
-            const isBass = mode === 'bass';
-            const buf = isBass ? bassBuffer : pulseBuffer;
-            const baseFreq = isBass ? BASE_FREQ_BASS : BASE_FREQ_PULSE;
+            let buf = null;
+            let baseFreq = 261.63;
 
-            if (!buf || !audioCtx) return;
+            if (mode === 'bass') {
+                buf = bassBuffer;
+                baseFreq = 55.0;
+            } else if (mode === 'pulse') {
+                buf = pulseBuffer;
+                baseFreq = 261.63;
+            } else if (mode === 'retro') {
+                buf = retroBuffer;
+                baseFreq = 440.0;
+            } else if (mode === 'retro2') {
+                buf = retro2Buffer;
+                baseFreq = 261.63;
+            }
+
+            if (!audioCtx) return;
+
+            if (!buf) {
+                try {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    const now = audioCtx.currentTime;
+
+                    if (mode === 'bass') {
+                        osc.type = 'sawtooth';
+                    } else {
+                        osc.type = 'square';
+                    }
+
+                    osc.frequency.setValueAtTime(keyObj.freq, now);
+
+                    gain.gain.setValueAtTime(0.001, now);
+                    if (mode === 'bass') {
+                        gain.gain.linearRampToValueAtTime(0.4, now + 0.01);
+                        gain.gain.exponentialRampToValueAtTime(0.12, now + 0.3);
+                    } else {
+                        gain.gain.linearRampToValueAtTime(0.35, now + 0.005);
+                        gain.gain.exponentialRampToValueAtTime(0.1, now + 0.25);
+                    }
+
+                    osc.connect(gain);
+                    gain.connect(masterGain);
+                    osc.start(now);
+
+                    activeVoices.set(voiceKey, { osc, gain, isOsc: true });
+                    highlightKey(keyObj.keyNum, true);
+                } catch (e) {}
+                return;
+            }
 
             try {
                 const src = audioCtx.createBufferSource();
@@ -271,19 +367,19 @@
                 const now = audioCtx.currentTime;
 
                 gain.gain.setValueAtTime(0.001, now);
-                if (isBass) {
-                    gain.gain.linearRampToValueAtTime(0.8, now + 0.01);
-                    gain.gain.exponentialRampToValueAtTime(0.4, now + 0.25);
+                if (mode === 'bass') {
+                    gain.gain.linearRampToValueAtTime(0.7, now + 0.01);
+                    gain.gain.exponentialRampToValueAtTime(0.3, now + 0.25);
                 } else {
-                    gain.gain.linearRampToValueAtTime(0.6, now + 0.005);
-                    gain.gain.exponentialRampToValueAtTime(0.3, now + 0.15);
+                    gain.gain.linearRampToValueAtTime(0.5, now + 0.005);
+                    gain.gain.exponentialRampToValueAtTime(0.2, now + 0.2);
                 }
 
                 src.connect(gain);
                 gain.connect(masterGain);
                 src.start(now);
 
-                activeVoices.set(voiceKey, { src, gain });
+                activeVoices.set(voiceKey, { src, gain, isOsc: false });
                 highlightKey(keyObj.keyNum, true);
             } catch (e) {}
         }
@@ -299,7 +395,12 @@
                     voice.gain.gain.cancelScheduledValues(now);
                     voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
                     voice.gain.gain.linearRampToValueAtTime(0.0001, now + 0.08);
-                    voice.src.stop(now + 0.09);
+                    
+                    if (voice.isOsc) {
+                        voice.osc.stop(now + 0.09);
+                    } else {
+                        voice.src.stop(now + 0.09);
+                    }
                 } catch (e) {}
                 activeVoices.delete(voiceKey);
             }
@@ -309,27 +410,62 @@
         function playDrum(index) {
             initAudio();
             if (audioCtx.state === 'suspended') audioCtx.resume();
-            if (!drumBuffer || !audioCtx) return;
+            if (!audioCtx) return;
 
-            const param = DRUM_PARAMS[index] || DRUM_PARAMS[0];
-            try {
-                const src = audioCtx.createBufferSource();
-                src.buffer = drumBuffer;
-                src.playbackRate.setValueAtTime(param.rate, audioCtx.currentTime);
+            if (drumBuffer) {
+                const param = DRUM_PARAMS[index] || DRUM_PARAMS[0];
+                try {
+                    const src = audioCtx.createBufferSource();
+                    src.buffer = drumBuffer;
+                    src.playbackRate.setValueAtTime(param.rate, audioCtx.currentTime);
 
-                const gain = audioCtx.createGain();
-                const now = audioCtx.currentTime;
+                    const gain = audioCtx.createGain();
+                    const now = audioCtx.currentTime;
 
-                gain.gain.setValueAtTime(param.gain, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + param.duration);
+                    gain.gain.setValueAtTime(param.gain, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + param.duration);
 
-                src.connect(gain);
-                gain.connect(masterGain);
-                src.start(now);
-                src.stop(now + param.duration + 0.05);
+                    src.connect(gain);
+                    gain.connect(masterGain);
+                    src.start(now);
+                    src.stop(now + param.duration + 0.05);
 
-                highlightDrum(index);
-            } catch (e) {}
+                    highlightDrum(index);
+                } catch (e) {}
+            } else {
+                try {
+                    const now = audioCtx.currentTime;
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+
+                    if (index === 0) {
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(120, now);
+                        osc.frequency.exponentialRampToValueAtTime(20, now + 0.12);
+                        gain.gain.setValueAtTime(1.0, now);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                    } else if (index === 1) {
+                        osc.type = 'square';
+                        osc.frequency.setValueAtTime(240, now);
+                        osc.frequency.exponentialRampToValueAtTime(40, now + 0.14);
+                        gain.gain.setValueAtTime(0.7, now);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+                    } else {
+                        const freqs = [800, 1200, 160, 280, 1400];
+                        osc.type = 'square';
+                        osc.frequency.setValueAtTime(freqs[index - 2] || 600, now);
+                        gain.gain.setValueAtTime(0.5, now);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    }
+
+                    osc.connect(gain);
+                    gain.connect(masterGain);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+
+                    highlightDrum(index);
+                } catch (e) {}
+            }
         }
 
         function highlightDrum(index) {
@@ -514,211 +650,251 @@
             keys88.forEach(k => {
                 stopNote(k.keyNum, 'bass');
                 stopNote(k.keyNum, 'pulse');
+                stopNote(k.keyNum, 'retro');
+                stopNote(k.keyNum, 'retro2');
             });
 
             document.getElementById('play-demo-btn').classList.remove('hidden');
             document.getElementById('stop-demo-btn').classList.add('hidden');
         }
 
-        function audioBufferToWav(buffer) {
-            const numChannels = buffer.numberOfChannels;
-            const sampleRate = buffer.sampleRate;
-            const format = 1;
-            const bitDepth = 16;
-            const bytesPerSample = bitDepth / 8;
-            const blockAlign = numChannels * bytesPerSample;
-            const length = buffer.length;
-            const dataByteLength = length * blockAlign;
-            const headerByteLength = 44;
-            const totalByteLength = headerByteLength + dataByteLength;
+        function toggleRecording() {
+            initAudio();
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        }
 
-            const arrayBuffer = new ArrayBuffer(totalByteLength);
-            const view = new DataView(arrayBuffer);
+        function startRecording() {
+            recordedChunksL = [];
+            recordedChunksR = [];
 
-            function writeString(view, offset, string) {
+            const bufferSize = 4096;
+            recorderNode = audioCtx.createScriptProcessor(bufferSize, 2, 2);
+
+            recorderNode.onaudioprocess = (e) => {
+                if (!isRecording) return;
+                const left = e.inputBuffer.getChannelData(0);
+                const right = e.inputBuffer.getChannelData(1);
+                recordedChunksL.push(new Float32Array(left));
+                recordedChunksR.push(new Float32Array(right));
+            };
+
+            masterGain.connect(recorderNode);
+            recorderNode.connect(audioCtx.destination);
+
+            isRecording = true;
+            document.getElementById('rec-btn').classList.replace('bg-red-600', 'bg-amber-600');
+            document.getElementById('rec-dot').classList.add('animate-ping');
+            document.getElementById('rec-text').innerText = 'STOP & SAVE';
+        }
+
+        function stopRecording() {
+            isRecording = false;
+            document.getElementById('rec-btn').classList.replace('bg-amber-600', 'bg-red-600');
+            document.getElementById('rec-dot').classList.remove('animate-ping');
+            document.getElementById('rec-text').innerText = 'REC (WAV)';
+
+            if (recorderNode) {
+                recorderNode.disconnect();
+                masterGain.disconnect(recorderNode);
+                recorderNode = null;
+            }
+
+            exportWAV(recordedChunksL, recordedChunksR, audioCtx.sampleRate);
+        }
+
+        function exportWAV(chunksL, chunksR, sampleRate) {
+            let totalLength = 0;
+            for (let i = 0; i < chunksL.length; i++) totalLength += chunksL[i].length;
+            if (totalLength === 0) return;
+
+            const mergedL = new Float32Array(totalLength);
+            const mergedR = new Float32Array(totalLength);
+            let offset = 0;
+            for (let i = 0; i < chunksL.length; i++) {
+                mergedL.set(chunksL[i], offset);
+                mergedR.set(chunksR[i], offset);
+                offset += chunksL[i].length;
+            }
+
+            const wavBuffer = encodeWAV([mergedL, mergedR], sampleRate);
+            const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `8bit_studio_rec_${Date.now()}.wav`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        function encodeWAV(channels, sampleRate) {
+            const numChannels = channels.length;
+            const length = channels[0].length;
+            const buffer = new ArrayBuffer(44 + length * numChannels * 2);
+            const view = new DataView(buffer);
+
+            function writeString(offset, string) {
                 for (let i = 0; i < string.length; i++) {
                     view.setUint8(offset + i, string.charCodeAt(i));
                 }
             }
 
-            writeString(view, 0, 'RIFF');
-            view.setUint32(4, 36 + dataByteLength, true);
-            writeString(view, 8, 'WAVE');
-            writeString(view, 12, 'fmt ');
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + length * numChannels * 2, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
             view.setUint32(16, 16, true);
-            view.setUint16(20, format, true);
+            view.setUint16(20, 1, true);
             view.setUint16(22, numChannels, true);
             view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * blockAlign, true);
-            view.setUint16(32, blockAlign, true);
-            view.setUint16(34, bitDepth, true);
-            writeString(view, 36, 'data');
-            view.setUint32(40, dataByteLength, true);
+            view.setUint32(28, sampleRate * numChannels * 2, true);
+            view.setUint16(32, numChannels * 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, length * numChannels * 2, true);
 
             let offset = 44;
             for (let i = 0; i < length; i++) {
-                for (let channel = 0; channel < numChannels; channel++) {
-                    let sample = buffer.getChannelData(channel)[i];
-                    sample = Math.max(-1, Math.min(1, sample));
+                for (let ch = 0; ch < numChannels; ch++) {
+                    let sample = Math.max(-1, Math.min(1, channels[ch][i]));
                     sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
                     view.setInt16(offset, sample, true);
                     offset += 2;
                 }
             }
-            return new Blob([arrayBuffer], { type: 'audio/wav' });
+            return buffer;
         }
 
-        function toggleRecording() {
-            initAudio();
-            if (!isRecording) {
-                recordedBuffersLeft = [];
-                recordedBuffersRight = [];
-
-                recorderNode = audioCtx.createScriptProcessor(4096, 2, 2);
-                recorderNode.onaudioprocess = (e) => {
-                    if (!isRecording) return;
-                    const left = e.inputBuffer.getChannelData(0);
-                    const right = e.inputBuffer.getChannelData(1);
-                    recordedBuffersLeft.push(new Float32Array(left));
-                    recordedBuffersRight.push(new Float32Array(right));
-                };
-
-                masterGain.connect(recorderNode);
-                recorderNode.connect(audioCtx.destination);
-
-                isRecording = true;
-                document.getElementById('rec-btn').classList.replace('bg-red-600', 'bg-amber-600');
-                document.getElementById('rec-text').innerText = 'STOP (WAV)';
-                document.getElementById('rec-dot').classList.add('animate-ping');
-            } else {
-                isRecording = false;
-                if (recorderNode) {
-                    masterGain.disconnect(recorderNode);
-                    recorderNode.disconnect();
-                }
-
-                document.getElementById('rec-btn').classList.replace('bg-amber-600', 'bg-red-600');
-                document.getElementById('rec-text').innerText = 'REC (WAV)';
-                document.getElementById('rec-dot').classList.remove('animate-ping');
-
-                const totalSamples = recordedBuffersLeft.reduce((acc, curr) => acc + curr.length, 0);
-                if (totalSamples > 0) {
-                    const recordedBuffer = audioCtx.createBuffer(2, totalSamples, audioCtx.sampleRate);
-                    const leftChan = recordedBuffer.getChannelData(0);
-                    const rightChan = recordedBuffer.getChannelData(1);
-                    let offset = 0;
-                    for (let i = 0; i < recordedBuffersLeft.length; i++) {
-                        leftChan.set(recordedBuffersLeft[i], offset);
-                        rightChan.set(recordedBuffersRight[i], offset);
-                        offset += recordedBuffersLeft[i].length;
-                    }
-
-                    const wavBlob = audioBufferToWav(recordedBuffer);
-                    const url = URL.createObjectURL(wavBlob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    a.download = `8bit_piano_drum_record_${Date.now()}.wav`;
-                    document.body.appendChild(a);
-                    a.click();
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                    }, 100);
-                }
-            }
+        function getWhiteKeyObj(whiteIdx, baseOctave) {
+            const whiteNotes = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+            const noteName = whiteNotes[whiteIdx % 7];
+            const oct = baseOctave + Math.floor(whiteIdx / 7);
+            return keys88.find(k => k.noteName === noteName && k.octave === oct);
         }
 
-        function getNoteFromKeyboardKey(key) {
-            const whiteIndex = keyMapWhite.indexOf(key.toLowerCase());
-            if (whiteIndex !== -1) {
-                const octaveKeys = keys88.filter(k => k.octave === currentOctave && !k.isBlack);
-                return octaveKeys[whiteIndex] || null;
-            }
-
-            const blackIndex = keyMapBlack.indexOf(key.toLowerCase());
-            if (blackIndex !== -1) {
-                const octaveKeys = keys88.filter(k => k.octave === currentOctave && k.isBlack);
-                return octaveKeys[blackIndex] || null;
-            }
-
-            return null;
+        function getBlackKeyObj(blackIdx, baseOctave) {
+            const blackNotes = ['C#', 'D#', 'F#', 'G#', 'A#'];
+            const noteName = blackNotes[blackIdx % 5];
+            const oct = baseOctave + Math.floor(blackIdx / 5);
+            return keys88.find(k => k.noteName === noteName && k.octave === oct);
         }
 
         window.addEventListener('keydown', (e) => {
             if (e.repeat) return;
+            const key = e.key.toLowerCase();
 
             if (e.key === 'ArrowLeft') {
-                currentOctave = Math.max(0, currentOctave - 1);
-                updateOctaveDisplay();
-                scrollCurrentOctaveIntoView();
+                if (currentOctave > 1) {
+                    currentOctave--;
+                    updateOctaveDisplay();
+                    scrollCurrentOctaveIntoView();
+                }
                 return;
             }
             if (e.key === 'ArrowRight') {
-                currentOctave = Math.min(8, currentOctave + 1);
-                updateOctaveDisplay();
-                scrollCurrentOctaveIntoView();
+                if (currentOctave < 7) {
+                    currentOctave++;
+                    updateOctaveDisplay();
+                    scrollCurrentOctaveIntoView();
+                }
                 return;
             }
 
-            const drumIndex = drumKeys.indexOf(e.key.toLowerCase());
+            const drumIndex = drumKeys.indexOf(key);
             if (drumIndex !== -1) {
                 playDrum(drumIndex);
                 return;
             }
 
-            const noteKey = getNoteFromKeyboardKey(e.key);
-            if (noteKey && !activeKeys.has(e.key)) {
-                activeKeys.add(e.key);
-                playNote(noteKey);
+            const whiteIdx = keyMapWhite.indexOf(key);
+            if (whiteIdx !== -1) {
+                const target = getWhiteKeyObj(whiteIdx, currentOctave);
+                if (target) {
+                    activeKeys.add(key);
+                    playNote(target);
+                }
+                return;
+            }
+
+            const blackIdx = keyMapBlack.indexOf(key);
+            if (blackIdx !== -1) {
+                const target = getBlackKeyObj(blackIdx, currentOctave);
+                if (target) {
+                    activeKeys.add(key);
+                    playNote(target);
+                }
+                return;
             }
         });
 
         window.addEventListener('keyup', (e) => {
-            const noteKey = getNoteFromKeyboardKey(e.key);
-            if (noteKey) {
-                activeKeys.delete(e.key);
-                stopNote(noteKey.keyNum);
+            const key = e.key.toLowerCase();
+            activeKeys.delete(key);
+
+            const whiteIdx = keyMapWhite.indexOf(key);
+            if (whiteIdx !== -1) {
+                const target = getWhiteKeyObj(whiteIdx, currentOctave);
+                if (target) stopNote(target.keyNum);
+                return;
+            }
+
+            const blackIdx = keyMapBlack.indexOf(key);
+            if (blackIdx !== -1) {
+                const target = getBlackKeyObj(blackIdx, currentOctave);
+                if (target) stopNote(target.keyNum);
+                return;
             }
         });
 
-        document.querySelectorAll('.drum-pad').forEach(pad => {
-            const index = parseInt(pad.dataset.drum, 10);
-            pad.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                playDrum(index);
-            });
-            pad.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                playDrum(index);
-            });
-        });
-
-        document.getElementById('tone-select').addEventListener('change', (e) => {
-            currentToneMode = e.target.value;
-        });
-
-        document.getElementById('octave-down').addEventListener('click', () => {
-            currentOctave = Math.max(0, currentOctave - 1);
-            updateOctaveDisplay();
-            scrollCurrentOctaveIntoView();
-        });
-
-        document.getElementById('octave-up').addEventListener('click', () => {
-            currentOctave = Math.min(8, currentOctave + 1);
-            updateOctaveDisplay();
-            scrollCurrentOctaveIntoView();
-        });
-
-        document.getElementById('play-demo-btn').addEventListener('click', playDemo);
-        document.getElementById('stop-demo-btn').addEventListener('click', stopDemo);
-        document.getElementById('rec-btn').addEventListener('click', toggleRecording);
-
-        window.addEventListener('DOMContentLoaded', () => {
+        window.onload = function () {
             renderKeyboard();
             updateOctaveDisplay();
             setTimeout(scrollCurrentOctaveIntoView, 200);
-        });
+
+            document.getElementById('tone-select').addEventListener('change', (e) => {
+                currentToneMode = e.target.value;
+            });
+
+            document.getElementById('octave-down').addEventListener('click', () => {
+                if (currentOctave > 1) {
+                    currentOctave--;
+                    updateOctaveDisplay();
+                    scrollCurrentOctaveIntoView();
+                }
+            });
+
+            document.getElementById('octave-up').addEventListener('click', () => {
+                if (currentOctave < 7) {
+                    currentOctave++;
+                    updateOctaveDisplay();
+                    scrollCurrentOctaveIntoView();
+                }
+            });
+
+            document.getElementById('play-demo-btn').addEventListener('click', playDemo);
+            document.getElementById('stop-demo-btn').addEventListener('click', stopDemo);
+            document.getElementById('rec-btn').addEventListener('click', toggleRecording);
+
+            document.querySelectorAll('[data-drum]').forEach((btn) => {
+                const idx = parseInt(btn.dataset.drum);
+                btn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    playDrum(idx);
+                });
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    playDrum(idx);
+                });
+            });
+
+            document.getElementById('midi-status-btn').addEventListener('click', () => {
+                initAudio();
+                initMIDI();
+            });
+        };
     </script>
 </body>
 </html>
