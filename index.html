@@ -63,7 +63,7 @@
                 <span class="text-[10px] text-slate-400">DEMO SONG:</span>
                 <select id="song-select" class="bg-slate-800 border border-slate-700 text-[10px] p-2 rounded text-cyan-300 focus:outline-none">
                     <option value="star">작은 별 (Twinkle Star)</option>
-                    <option value="airplane">비행기 (Airplane)</option>
+                    <option value="mary">매리의 어린 양 (Mary Had a Little Lamb)</option>
                     <option value="elise">엘리제를 위하여 (Für Elise)</option>
                 </select>
             </div>
@@ -304,20 +304,20 @@
             if (activeVoices.has(voiceKey)) stopNote(keyObj.keyNum, mode);
 
             let buf = null;
-            let baseFreq = 261.63;
+            let baseFreq = 12.5;
 
             if (mode === 'bass') {
                 buf = bassBuffer;
-                baseFreq = 55.0;
+                baseFreq = 12.5;
             } else if (mode === 'pulse') {
                 buf = pulseBuffer;
-                baseFreq = 261.63;
+                baseFreq = 26.0;
             } else if (mode === 'retro') {
                 buf = retroBuffer;
-                baseFreq = 440.0;
+                baseFreq = 12.0;
             } else if (mode === 'retro2') {
                 buf = retro2Buffer;
-                baseFreq = 261.63;
+                baseFreq = 80.0;
             }
 
             if (!audioCtx) return;
@@ -564,7 +564,7 @@
                     ["F2", 2], ["C2", 2], ["G2", 2], ["C2", 2]
                 ]
             },
-            airplane: {
+            mary: {
                 bpm: 130,
                 melody: [
                     ["E4", 1.5], ["D4", 0.5], ["C4", 1], ["D4", 1], ["E4", 1], ["E4", 1], ["E4", 2],
@@ -796,7 +796,7 @@
             }
             if (e.key === 'ArrowRight') {
                 if (currentOctave < 7) {
-                    currentOctave++;
+                    currentOctave--;
                     updateOctaveDisplay();
                     scrollCurrentOctaveIntoView();
                 }
