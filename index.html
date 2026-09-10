@@ -183,7 +183,10 @@
         ];
 
         function initAudio() {
-            if (audioCtx) return;
+            if (audioCtx) {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                return;
+            }
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AudioContext();
             masterGain = audioCtx.createGain();
@@ -278,7 +281,7 @@
         async function loadBuffers() {
             const fetchAndDecode = async (url) => {
                 try {
-                    const res = await fetch(url);
+                    const res = await fetch(encodeURI(url));
                     if (!res.ok) return null;
                     const ab = await res.arrayBuffer();
                     return await audioCtx.decodeAudioData(ab);
@@ -289,8 +292,8 @@
 
             bassBuffer = await fetchAndDecode('bass_tone.wav') || await fetchAndDecode('bass.wav');
             pulseBuffer = await fetchAndDecode('mane_pulse.wav') || await fetchAndDecode('pulse.wav');
-            retroBuffer = await fetchAndDecode('pulse_25%.wav') || await fetchAndDecode('retro.wav');
-            retro2Buffer = await fetchAndDecode('pulse_50%.wav') || await fetchAndDecode('retro2.wav');
+            retroBuffer = await fetchAndDecode('pulse_25%.wav') || await fetchAndDecode('pulse_25%25.wav') || await fetchAndDecode('retro.wav');
+            retro2Buffer = await fetchAndDecode('pulse_50%.wav') || await fetchAndDecode('pulse_50%25.wav') || await fetchAndDecode('retro2.wav');
             drumBuffer = await fetchAndDecode('drum.wav');
         }
 
@@ -784,6 +787,11 @@
 
         window.addEventListener('keydown', (e) => {
             if (e.repeat) return;
+            if (document.activeElement && document.activeElement.tagName === 'SELECT') {
+                document.activeElement.blur();
+            }
+
+            initAudio();
             const key = e.key.toLowerCase();
 
             if (e.key === 'ArrowLeft') {
@@ -796,7 +804,7 @@
             }
             if (e.key === 'ArrowRight') {
                 if (currentOctave < 7) {
-                    currentOctave--;
+                    currentOctave++;
                     updateOctaveDisplay();
                     scrollCurrentOctaveIntoView();
                 }
@@ -856,6 +864,11 @@
 
             document.getElementById('tone-select').addEventListener('change', (e) => {
                 currentToneMode = e.target.value;
+                e.target.blur();
+            });
+
+            document.getElementById('song-select').addEventListener('change', (e) => {
+                e.target.blur();
             });
 
             document.getElementById('octave-down').addEventListener('click', () => {
