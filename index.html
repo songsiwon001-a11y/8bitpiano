@@ -38,6 +38,8 @@
                     <option value="pulse">통통 튀는 펄스 전자음</option>
                     <option value="retro">옛날게임 소리</option>
                     <option value="retro2">옛날게임 소리 2</option>
+                    <option value="bell1">종소리 1</option>
+                    <option value="bell2">종소리 2</option>
                 </select>
             </div>
 
@@ -143,6 +145,8 @@
         let pulseBuffer = null;
         let retroBuffer = null;
         let retro2Buffer = null;
+        let bell1Buffer = null;
+        let bell2Buffer = null;
         let drumBuffer = null;
 
         let currentToneMode = 'bass';
@@ -279,21 +283,25 @@
         }
 
         async function loadBuffers() {
-            const fetchAndDecode = async (url) => {
-                try {
-                    const res = await fetch(encodeURI(url));
-                    if (!res.ok) return null;
-                    const ab = await res.arrayBuffer();
-                    return await audioCtx.decodeAudioData(ab);
-                } catch (e) {
-                    return null;
+            const fetchAndDecode = async (urls) => {
+                const urlList = Array.isArray(urls) ? urls : [urls];
+                for (let u of urlList) {
+                    try {
+                        const res = await fetch(encodeURI(u));
+                        if (!res.ok) continue;
+                        const ab = await res.arrayBuffer();
+                        return await audioCtx.decodeAudioData(ab);
+                    } catch (e) {}
                 }
+                return null;
             };
 
-            bassBuffer = await fetchAndDecode('bass_tone.wav') || await fetchAndDecode('bass.wav');
-            pulseBuffer = await fetchAndDecode('mane_pulse.wav') || await fetchAndDecode('pulse.wav');
-            retroBuffer = await fetchAndDecode('pulse_25%.wav') || await fetchAndDecode('pulse_25%25.wav') || await fetchAndDecode('retro.wav');
-            retro2Buffer = await fetchAndDecode('pulse_50%.wav') || await fetchAndDecode('pulse_50%25.wav') || await fetchAndDecode('retro2.wav');
+            bassBuffer = await fetchAndDecode(['bass_tone.wav', 'bass.wav']);
+            pulseBuffer = await fetchAndDecode(['mane_pulse.wav', 'pulse.wav']);
+            retroBuffer = await fetchAndDecode(['pulse_25%.wav', 'pulse_25%25.wav', 'retro.wav']);
+            retro2Buffer = await fetchAndDecode(['pulse_50%.wav', 'pulse_50%25.wav', 'retro2.wav']);
+            bell1Buffer = await fetchAndDecode(['bell_type_1.wav', 'bell_type_1.mp3']);
+            bell2Buffer = await fetchAndDecode(['bell_type_2.wav', 'bell_type_2.mp3']);
             drumBuffer = await fetchAndDecode('drum.wav');
         }
 
@@ -321,42 +329,20 @@
             } else if (mode === 'retro2') {
                 buf = retro2Buffer;
                 baseFreq = 80.0;
+            } else if (mode === 'bell1') {
+                buf = bell1Buffer;
+                baseFreq = 277.1826;
+            } else if (mode === 'bell2') {
+                buf = bell2Buffer;
+                baseFreq = 670.0;
             }
 
-            if (!audioCtx) return;
-
-            if (!buf) {
-                try {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-                    const now = audioCtx.currentTime;
-
-                    osc.type = mode === 'bass' ? 'sawtooth' : 'square';
-                    osc.frequency.setValueAtTime(keyObj.freq, now);
-
-                    gain.gain.setValueAtTime(0.001, now);
-                    if (mode === 'bass') {
-                        gain.gain.linearRampToValueAtTime(0.4, now + 0.01);
-                        gain.gain.exponentialRampToValueAtTime(0.12, now + 0.3);
-                    } else {
-                        gain.gain.linearRampToValueAtTime(0.35, now + 0.005);
-                        gain.gain.exponentialRampToValueAtTime(0.1, now + 0.25);
-                    }
-
-                    osc.connect(gain);
-                    gain.connect(masterGain);
-                    osc.start(now);
-
-                    activeVoices.set(voiceKey, { osc, gain, isOsc: true });
-                    highlightKey(keyObj.keyNum, true);
-                } catch (e) {}
-                return;
-            }
+            if (!audioCtx || !buf) return;
 
             try {
                 const src = audioCtx.createBufferSource();
                 src.buffer = buf;
-                src.loop = true;
+                src.loop = (mode !== 'bell1' && mode !== 'bell2');
 
                 const rate = Math.max(0.01, keyObj.freq / baseFreq);
                 src.playbackRate.setValueAtTime(rate, audioCtx.currentTime);
@@ -368,6 +354,9 @@
                 if (mode === 'bass') {
                     gain.gain.linearRampToValueAtTime(0.7, now + 0.01);
                     gain.gain.exponentialRampToValueAtTime(0.3, now + 0.25);
+                } else if (mode === 'bell1' || mode === 'bell2') {
+                    gain.gain.linearRampToValueAtTime(0.8, now + 0.005);
+                    gain.gain.exponentialRampToValueAtTime(0.1, now + 1.2);
                 } else {
                     gain.gain.linearRampToValueAtTime(0.5, now + 0.005);
                     gain.gain.exponentialRampToValueAtTime(0.2, now + 0.2);
@@ -377,7 +366,7 @@
                 gain.connect(masterGain);
                 src.start(now);
 
-                activeVoices.set(voiceKey, { src, gain, isOsc: false });
+                activeVoices.set(voiceKey, { src, gain });
                 highlightKey(keyObj.keyNum, true);
             } catch (e) {}
         }
@@ -393,12 +382,7 @@
                     voice.gain.gain.cancelScheduledValues(now);
                     voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
                     voice.gain.gain.linearRampToValueAtTime(0.0001, now + 0.08);
-                    
-                    if (voice.isOsc) {
-                        voice.osc.stop(now + 0.09);
-                    } else {
-                        voice.src.stop(now + 0.09);
-                    }
+                    voice.src.stop(now + 0.09);
                 } catch (e) {}
                 activeVoices.delete(voiceKey);
             }
@@ -408,62 +392,27 @@
         function playDrum(index) {
             initAudio();
             if (audioCtx.state === 'suspended') audioCtx.resume();
-            if (!audioCtx) return;
+            if (!audioCtx || !drumBuffer) return;
 
-            if (drumBuffer) {
-                const param = DRUM_PARAMS[index] || DRUM_PARAMS[0];
-                try {
-                    const src = audioCtx.createBufferSource();
-                    src.buffer = drumBuffer;
-                    src.playbackRate.setValueAtTime(param.rate, audioCtx.currentTime);
+            const param = DRUM_PARAMS[index] || DRUM_PARAMS[0];
+            try {
+                const src = audioCtx.createBufferSource();
+                src.buffer = drumBuffer;
+                src.playbackRate.setValueAtTime(param.rate, audioCtx.currentTime);
 
-                    const gain = audioCtx.createGain();
-                    const now = audioCtx.currentTime;
+                const gain = audioCtx.createGain();
+                const now = audioCtx.currentTime;
 
-                    gain.gain.setValueAtTime(param.gain, now);
-                    gain.gain.exponentialRampToValueAtTime(0.001, now + param.duration);
+                gain.gain.setValueAtTime(param.gain, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + param.duration);
 
-                    src.connect(gain);
-                    gain.connect(masterGain);
-                    src.start(now);
-                    src.stop(now + param.duration + 0.05);
+                src.connect(gain);
+                gain.connect(masterGain);
+                src.start(now);
+                src.stop(now + param.duration + 0.05);
 
-                    highlightDrum(index);
-                } catch (e) {}
-            } else {
-                try {
-                    const now = audioCtx.currentTime;
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-
-                    if (index === 0) {
-                        osc.type = 'triangle';
-                        osc.frequency.setValueAtTime(120, now);
-                        osc.frequency.exponentialRampToValueAtTime(20, now + 0.12);
-                        gain.gain.setValueAtTime(1.0, now);
-                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-                    } else if (index === 1) {
-                        osc.type = 'square';
-                        osc.frequency.setValueAtTime(240, now);
-                        osc.frequency.exponentialRampToValueAtTime(40, now + 0.14);
-                        gain.gain.setValueAtTime(0.7, now);
-                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
-                    } else {
-                        const freqs = [800, 1200, 160, 280, 1400];
-                        osc.type = 'square';
-                        osc.frequency.setValueAtTime(freqs[index - 2] || 600, now);
-                        gain.gain.setValueAtTime(0.5, now);
-                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-                    }
-
-                    osc.connect(gain);
-                    gain.connect(masterGain);
-                    osc.start(now);
-                    osc.stop(now + 0.15);
-
-                    highlightDrum(index);
-                } catch (e) {}
-            }
+                highlightDrum(index);
+            } catch (e) {}
         }
 
         function highlightDrum(index) {
@@ -650,6 +599,8 @@
                 stopNote(k.keyNum, 'pulse');
                 stopNote(k.keyNum, 'retro');
                 stopNote(k.keyNum, 'retro2');
+                stopNote(k.keyNum, 'bell1');
+                stopNote(k.keyNum, 'bell2');
             });
 
             document.getElementById('play-demo-btn').classList.remove('hidden');
