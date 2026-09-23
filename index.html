@@ -40,6 +40,7 @@
                     <option value="retro2">옛날게임 소리 2</option>
                     <option value="bell1">종소리 1</option>
                     <option value="bell2">종소리 2</option>
+                    <option value="srjs">srjs signiture synth</option>
                 </select>
             </div>
 
@@ -65,7 +66,7 @@
                 <span class="text-[10px] text-slate-400">DEMO SONG:</span>
                 <select id="song-select" class="bg-slate-800 border border-slate-700 text-[10px] p-2 rounded text-cyan-300 focus:outline-none">
                     <option value="star">작은 별 (Twinkle Star)</option>
-                    <option value="mary">매리의 어린 양 (Mary Had a Little Lamb)</option>
+                    <option value="mary">비행기 (Mary Had a Little Lamb)</option>
                     <option value="elise">엘리제를 위하여 (Für Elise)</option>
                 </select>
             </div>
@@ -147,6 +148,7 @@
         let retro2Buffer = null;
         let bell1Buffer = null;
         let bell2Buffer = null;
+        let srjsBuffer = null;
         let drumBuffer = null;
 
         let currentToneMode = 'bass';
@@ -302,6 +304,7 @@
             retro2Buffer = await fetchAndDecode(['pulse_50%.wav', 'pulse_50%25.wav', 'retro2.wav']);
             bell1Buffer = await fetchAndDecode(['bell_type_1.wav', 'bell_type_1.mp3']);
             bell2Buffer = await fetchAndDecode(['bell_type_2.wav', 'bell_type_2.mp3']);
+            srjsBuffer = await fetchAndDecode(['srjs synth.wav', 'srjs_synth.wav', 'srjs%20synth.wav']);
             drumBuffer = await fetchAndDecode('drum.wav');
         }
 
@@ -335,6 +338,9 @@
             } else if (mode === 'bell2') {
                 buf = bell2Buffer;
                 baseFreq = 670.0;
+            } else if (mode === 'srjs') {
+                buf = srjsBuffer;
+                baseFreq = 20.0;
             }
 
             if (!audioCtx || !buf) return;
@@ -552,16 +558,17 @@
             const songKey = document.getElementById('song-select').value;
             const song = DEMO_SONGS[songKey];
             const beatMs = (60 / song.bpm) * 1000;
+            const toneForMelody = currentToneMode;
 
             let currentTime = 0;
             song.melody.forEach(([note, duration]) => {
                 const k = keys88.find(x => x.fullName === note);
                 if (k) {
                     const t1 = setTimeout(() => {
-                        if (isDemoPlaying) playNote(k, 'pulse');
+                        if (isDemoPlaying) playNote(k, toneForMelody);
                     }, currentTime);
                     const t2 = setTimeout(() => {
-                        if (isDemoPlaying) stopNote(k.keyNum, 'pulse');
+                        if (isDemoPlaying) stopNote(k.keyNum, toneForMelody);
                     }, currentTime + (duration * beatMs * 0.85));
                     demoTimeouts.push(t1, t2);
                 }
@@ -601,6 +608,7 @@
                 stopNote(k.keyNum, 'retro2');
                 stopNote(k.keyNum, 'bell1');
                 stopNote(k.keyNum, 'bell2');
+                stopNote(k.keyNum, 'srjs');
             });
 
             document.getElementById('play-demo-btn').classList.remove('hidden');
