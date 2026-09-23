@@ -41,6 +41,8 @@
                     <option value="bell1">종소리 1</option>
                     <option value="bell2">종소리 2</option>
                     <option value="srjs">srjs signiture synth</option>
+                    <option value="ear1">귀를 찢는 전자음</option>
+                    <option value="ear2">귀를 찢는 전자음2</option>
                 </select>
             </div>
 
@@ -149,6 +151,8 @@
         let bell1Buffer = null;
         let bell2Buffer = null;
         let srjsBuffer = null;
+        let ear1Buffer = null;
+        let ear2Buffer = null;
         let drumBuffer = null;
 
         let currentToneMode = 'bass';
@@ -305,6 +309,8 @@
             bell1Buffer = await fetchAndDecode(['bell_type_1.wav', 'bell_type_1.mp3']);
             bell2Buffer = await fetchAndDecode(['bell_type_2.wav', 'bell_type_2.mp3']);
             srjsBuffer = await fetchAndDecode(['srjs synth.wav', 'srjs_synth.wav', 'srjs%20synth.wav']);
+            ear1Buffer = await fetchAndDecode(['pulse_6.25%.wav', 'pulse_6.25%25.wav', 'pulse_6.25.wav']);
+            ear2Buffer = await fetchAndDecode(['short_noise.wav']);
             drumBuffer = await fetchAndDecode('drum.wav');
         }
 
@@ -341,6 +347,12 @@
             } else if (mode === 'srjs') {
                 buf = srjsBuffer;
                 baseFreq = 20.0;
+            } else if (mode === 'ear1') {
+                buf = ear1Buffer;
+                baseFreq = 9.0;
+            } else if (mode === 'ear2') {
+                buf = ear2Buffer;
+                baseFreq = 3.0;
             }
 
             if (!audioCtx || !buf) return;
@@ -609,6 +621,8 @@
                 stopNote(k.keyNum, 'bell1');
                 stopNote(k.keyNum, 'bell2');
                 stopNote(k.keyNum, 'srjs');
+                stopNote(k.keyNum, 'ear1');
+                stopNote(k.keyNum, 'ear2');
             });
 
             document.getElementById('play-demo-btn').classList.remove('hidden');
