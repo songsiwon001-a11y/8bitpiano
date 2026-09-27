@@ -43,6 +43,7 @@
                     <option value="srjs">srjs signiture synth</option>
                     <option value="ear1">옛날게임 소리 3</option>
                     <option value="ear2">화려한 전기기타</option>
+                    <option value="soo">수우우우우우우우</option>
                 </select>
             </div>
 
@@ -153,6 +154,7 @@
         let srjsBuffer = null;
         let ear1Buffer = null;
         let ear2Buffer = null;
+        let sooBuffer = null;
         let drumBuffer = null;
 
         let currentToneMode = 'bass';
@@ -311,6 +313,7 @@
             srjsBuffer = await fetchAndDecode(['srjs synth.wav', 'srjs_synth.wav', 'srjs%20synth.wav']);
             ear1Buffer = await fetchAndDecode(['pulse_6.25%.wav', 'pulse_6.25%25.wav', 'pulse_6.25.wav']);
             ear2Buffer = await fetchAndDecode(['short_noise.wav']);
+            sooBuffer = await fetchAndDecode(['soo_tone.mp3', 'soo_tone.wav']);
             drumBuffer = await fetchAndDecode('drum.wav');
         }
 
@@ -353,6 +356,9 @@
             } else if (mode === 'ear2') {
                 buf = ear2Buffer;
                 baseFreq = 3.0;
+            } else if (mode === 'soo') {
+                buf = sooBuffer;
+                baseFreq = 500.0;
             }
 
             if (!audioCtx || !buf) return;
@@ -623,6 +629,7 @@
                 stopNote(k.keyNum, 'srjs');
                 stopNote(k.keyNum, 'ear1');
                 stopNote(k.keyNum, 'ear2');
+                stopNote(k.keyNum, 'soo');
             });
 
             document.getElementById('play-demo-btn').classList.remove('hidden');
