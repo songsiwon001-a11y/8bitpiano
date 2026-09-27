@@ -366,7 +366,7 @@
             try {
                 const src = audioCtx.createBufferSource();
                 src.buffer = buf;
-                src.loop = (mode !== 'bell1' && mode !== 'bell2');
+                src.loop = (mode !== 'bell1' && mode !== 'bell2' && mode !== 'soo');
 
                 const rate = Math.max(0.01, keyObj.freq / baseFreq);
                 src.playbackRate.setValueAtTime(rate, audioCtx.currentTime);
