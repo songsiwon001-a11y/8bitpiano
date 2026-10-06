@@ -40,6 +40,7 @@
                     <option value="retro2">옛날게임 소리 2</option>
                     <option value="bell1">종소리 1</option>
                     <option value="bell2">종소리 2</option>
+                    <option value="musicbox">뮤직박스</option>
                     <option value="srjs">srjs signiture synth</option>
                     <option value="ear1">옛날게임 소리 3</option>
                     <option value="ear2">화려한 전기기타</option>
@@ -151,6 +152,7 @@
         let retro2Buffer = null;
         let bell1Buffer = null;
         let bell2Buffer = null;
+        let musicboxBuffer = null;
         let srjsBuffer = null;
         let ear1Buffer = null;
         let ear2Buffer = null;
@@ -310,6 +312,7 @@
             retro2Buffer = await fetchAndDecode(['pulse_50%.wav', 'pulse_50%25.wav', 'retro2.wav']);
             bell1Buffer = await fetchAndDecode(['bell_type_1.wav', 'bell_type_1.mp3']);
             bell2Buffer = await fetchAndDecode(['bell_type_2.wav', 'bell_type_2.mp3']);
+            musicboxBuffer = await fetchAndDecode(['musicbox.wav', 'musicbox.mp3']);
             srjsBuffer = await fetchAndDecode(['srjs synth.wav', 'srjs_synth.wav', 'srjs%20synth.wav']);
             ear1Buffer = await fetchAndDecode(['pulse_6.25%.wav', 'pulse_6.25%25.wav', 'pulse_6.25.wav']);
             ear2Buffer = await fetchAndDecode(['short_noise.wav']);
@@ -347,6 +350,9 @@
             } else if (mode === 'bell2') {
                 buf = bell2Buffer;
                 baseFreq = 670.0;
+            } else if (mode === 'musicbox') {
+                buf = musicboxBuffer;
+                baseFreq = 261.62556;
             } else if (mode === 'srjs') {
                 buf = srjsBuffer;
                 baseFreq = 20.0;
@@ -366,7 +372,7 @@
             try {
                 const src = audioCtx.createBufferSource();
                 src.buffer = buf;
-                src.loop = (mode !== 'bell1' && mode !== 'bell2' && mode !== 'soo');
+                src.loop = (mode !== 'bell1' && mode !== 'bell2' && mode !== 'musicbox' && mode !== 'soo');
 
                 const rate = Math.max(0.01, keyObj.freq / baseFreq);
                 src.playbackRate.setValueAtTime(rate, audioCtx.currentTime);
@@ -378,9 +384,9 @@
                 if (mode === 'bass') {
                     gain.gain.linearRampToValueAtTime(0.7, now + 0.01);
                     gain.gain.exponentialRampToValueAtTime(0.3, now + 0.25);
-                } else if (mode === 'bell1' || mode === 'bell2') {
+                } else if (mode === 'bell1' || mode === 'bell2' || mode === 'musicbox') {
                     gain.gain.linearRampToValueAtTime(0.8, now + 0.005);
-                    gain.gain.exponentialRampToValueAtTime(0.1, now + 1.2);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
                 } else {
                     gain.gain.linearRampToValueAtTime(0.5, now + 0.005);
                     gain.gain.exponentialRampToValueAtTime(0.2, now + 0.2);
@@ -626,6 +632,7 @@
                 stopNote(k.keyNum, 'retro2');
                 stopNote(k.keyNum, 'bell1');
                 stopNote(k.keyNum, 'bell2');
+                stopNote(k.keyNum, 'musicbox');
                 stopNote(k.keyNum, 'srjs');
                 stopNote(k.keyNum, 'ear1');
                 stopNote(k.keyNum, 'ear2');
