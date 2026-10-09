@@ -384,23 +384,11 @@
                 src.playbackRate.setValueAtTime(rate, audioCtx.currentTime);
 
                 const gain = audioCtx.createGain();
-                const now = audioCtx.currentTime;
-
-                gain.gain.setValueAtTime(0.001, now);
-                if (mode === 'bass') {
-                    gain.gain.linearRampToValueAtTime(0.7, now + 0.01);
-                    gain.gain.exponentialRampToValueAtTime(0.3, now + 0.25);
-                } else if (mode === 'bell1' || mode === 'bell2' || mode === 'musicbox' || mode === 'vocal') {
-                    gain.gain.linearRampToValueAtTime(0.8, now + 0.005);
-                    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
-                } else {
-                    gain.gain.linearRampToValueAtTime(0.5, now + 0.005);
-                    gain.gain.exponentialRampToValueAtTime(0.2, now + 0.2);
-                }
+                gain.gain.setValueAtTime(0.85, audioCtx.currentTime);
 
                 src.connect(gain);
                 gain.connect(masterGain);
-                src.start(now);
+                src.start(audioCtx.currentTime);
 
                 activeVoices.set(voiceKey, { src, gain });
                 highlightKey(keyObj.keyNum, true);
@@ -415,10 +403,9 @@
             if (voice && audioCtx) {
                 try {
                     const now = audioCtx.currentTime;
-                    voice.gain.gain.cancelScheduledValues(now);
                     voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
-                    voice.gain.gain.linearRampToValueAtTime(0.0001, now + 0.08);
-                    voice.src.stop(now + 0.09);
+                    voice.gain.gain.linearRampToValueAtTime(0.0001, now + 0.01);
+                    voice.src.stop(now + 0.015);
                 } catch (e) {}
                 activeVoices.delete(voiceKey);
             }
@@ -440,12 +427,11 @@
                 const now = audioCtx.currentTime;
 
                 gain.gain.setValueAtTime(param.gain, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + param.duration);
 
                 src.connect(gain);
                 gain.connect(masterGain);
                 src.start(now);
-                src.stop(now + param.duration + 0.05);
+                src.stop(now + param.duration);
 
                 highlightDrum(index);
             } catch (e) {}
