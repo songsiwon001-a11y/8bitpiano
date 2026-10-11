@@ -46,7 +46,14 @@
                     <option value="ear1">옛날게임 소리 3</option>
                     <option value="ear2">화려한 전기기타</option>
                     <option value="soo">수우우우우우우우</option>
+                    <option value="pwm">PWM</option>
                 </select>
+            </div>
+
+            <div id="pwm-controls" class="hidden flex items-center gap-2 bg-slate-800 px-2.5 py-1 rounded border border-amber-600/50">
+                <span class="text-amber-400 text-[9px]">듀티사이클:</span>
+                <input id="pwm-duty" type="range" min="10" max="90" value="50" class="w-20 accent-amber-500 cursor-pointer">
+                <span id="pwm-duty-val" class="text-[9px] text-amber-300 w-6">50%</span>
             </div>
 
             <div class="flex items-center gap-1 bg-slate-800 px-3 py-1.5 rounded border border-slate-700">
@@ -64,6 +71,10 @@
             </div>
         </div>
     </header>
+
+    <div id="pwm-warning" class="hidden w-full bg-amber-950/90 border-y border-amber-600/60 py-1.5 px-4 text-center text-[9px] text-amber-300">
+        해당 음색은 일부 저사양 기기 혹은 브라우저에서 사운드가 비정상적으로 출력될 수 있습니다
+    </div>
 
     <main class="flex-1 flex flex-col justify-center items-center p-4 gap-4 max-w-7xl mx-auto w-full">
         <div class="w-full bg-slate-900/80 p-3 rounded-xl border-2 border-slate-800 flex flex-wrap items-center justify-between gap-4">
@@ -159,16 +170,19 @@
         let ear1Buffer = null;
         let ear2Buffer = null;
         let sooBuffer = null;
+        let pwmBuffer = null;
         let drumBuffer = null;
 
         let currentToneMode = 'bass';
         let currentOctave = 4;
+        let pwmDutyCycle = 50;
         let isDemoPlaying = false;
         let demoTimeouts = [];
 
         let midiAccess = null;
 
         const activeVoices = new Map();
+        const pwmIntervals = new Map();
         const pressedKeyMap = new Map();
 
         const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -320,6 +334,7 @@
             ear1Buffer = await fetchAndDecode(['pulse_6.25%.wav', 'pulse_6.25%25.wav', 'pulse_6.25.wav']);
             ear2Buffer = await fetchAndDecode(['short_noise.wav']);
             sooBuffer = await fetchAndDecode(['soo_tone.mp3', 'soo_tone.wav']);
+            pwmBuffer = await fetchAndDecode(['pwm_signal.wav', 'pwm.wav']);
             drumBuffer = await fetchAndDecode('drum.wav');
         }
 
@@ -371,14 +386,60 @@
             } else if (mode === 'soo') {
                 buf = sooBuffer;
                 baseFreq = 500.0;
+            } else if (mode === 'pwm') {
+                buf = pwmBuffer;
+                baseFreq = 100.0;
             }
 
             if (!audioCtx || !buf) return;
 
             try {
+                if (mode === 'pwm') {
+                    const rate = Math.max(0.01, keyObj.freq / baseFreq);
+                    const gain = audioCtx.createGain();
+                    gain.gain.setValueAtTime(0.85, audioCtx.currentTime);
+                    gain.connect(masterGain);
+
+                    const periodMs = Math.max(10, Math.min(200, 1000 / (keyObj.freq * 0.5)));
+                    const duty = pwmDutyCycle / 100;
+                    const onTime = periodMs * duty;
+                    const offTime = periodMs * (1 - duty);
+
+                    const runPWM = () => {
+                        try {
+                            if (!activeVoices.has(voiceKey)) return;
+                            const src = audioCtx.createBufferSource();
+                            src.buffer = buf;
+                            src.loop = true;
+                            src.playbackRate.setValueAtTime(rate, audioCtx.currentTime);
+                            src.connect(gain);
+                            src.start(audioCtx.currentTime);
+
+                            const currentVoice = activeVoices.get(voiceKey);
+                            if (currentVoice) currentVoice.currentSrc = src;
+
+                            const tOut = setTimeout(() => {
+                                try {
+                                    src.stop();
+                                    src.disconnect();
+                                } catch (e) {}
+                                const tOff = setTimeout(runPWM, Math.max(2, offTime));
+                                if (currentVoice) currentVoice.nextTimeout = tOff;
+                            }, Math.max(2, onTime));
+
+                            if (currentVoice) currentVoice.nextTimeout = tOut;
+                        } catch (e) {}
+                    };
+
+                    activeVoices.set(voiceKey, { gain, isPWM: true });
+                    runPWM();
+                    highlightKey(keyObj.keyNum, true);
+                    return;
+                }
+
                 const src = audioCtx.createBufferSource();
                 src.buffer = buf;
-                src.loop = (mode !== 'bell1' && mode !== 'bell2' && mode !== 'musicbox' && mode !== 'vocal' && mode !== 'soo');
+                src.loop = (mode !== 'soo');
 
                 const rate = Math.max(0.01, keyObj.freq / baseFreq);
                 src.playbackRate.setValueAtTime(rate, audioCtx.currentTime);
@@ -400,13 +461,21 @@
             const voiceKey = `${keyNum}_${mode}`;
             const voice = activeVoices.get(voiceKey);
 
-            if (voice && audioCtx) {
-                try {
-                    const now = audioCtx.currentTime;
-                    voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
-                    voice.gain.gain.linearRampToValueAtTime(0.0001, now + 0.01);
-                    voice.src.stop(now + 0.015);
-                } catch (e) {}
+            if (voice) {
+                if (voice.isPWM) {
+                    if (voice.nextTimeout) clearTimeout(voice.nextTimeout);
+                    if (voice.currentSrc) {
+                        try { voice.currentSrc.stop(); } catch (e) {}
+                    }
+                    try { voice.gain.disconnect(); } catch (e) {}
+                } else if (voice.src && audioCtx) {
+                    try {
+                        const now = audioCtx.currentTime;
+                        voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
+                        voice.gain.gain.linearRampToValueAtTime(0.0001, now + 0.01);
+                        voice.src.stop(now + 0.015);
+                    } catch (e) {}
+                }
                 activeVoices.delete(voiceKey);
             }
             highlightKey(keyNum, false);
@@ -618,18 +687,9 @@
             demoTimeouts = [];
 
             keys88.forEach(k => {
-                stopNote(k.keyNum, 'bass');
-                stopNote(k.keyNum, 'pulse');
-                stopNote(k.keyNum, 'retro');
-                stopNote(k.keyNum, 'retro2');
-                stopNote(k.keyNum, 'bell1');
-                stopNote(k.keyNum, 'bell2');
-                stopNote(k.keyNum, 'musicbox');
-                stopNote(k.keyNum, 'vocal');
-                stopNote(k.keyNum, 'srjs');
-                stopNote(k.keyNum, 'ear1');
-                stopNote(k.keyNum, 'ear2');
-                stopNote(k.keyNum, 'soo');
+                ['bass', 'pulse', 'retro', 'retro2', 'bell1', 'bell2', 'musicbox', 'vocal', 'srjs', 'ear1', 'ear2', 'soo', 'pwm'].forEach(mode => {
+                    stopNote(k.keyNum, mode);
+                });
             });
 
             document.getElementById('play-demo-btn').classList.remove('hidden');
@@ -827,9 +887,25 @@
             updateOctaveDisplay();
             setTimeout(scrollCurrentOctaveIntoView, 200);
 
-            document.getElementById('tone-select').addEventListener('change', (e) => {
+            const toneSelect = document.getElementById('tone-select');
+            const pwmControls = document.getElementById('pwm-controls');
+            const pwmWarning = document.getElementById('pwm-warning');
+
+            toneSelect.addEventListener('change', (e) => {
                 currentToneMode = e.target.value;
+                if (currentToneMode === 'pwm') {
+                    pwmControls.classList.remove('hidden');
+                    pwmWarning.classList.remove('hidden');
+                } else {
+                    pwmControls.classList.add('hidden');
+                    pwmWarning.classList.add('hidden');
+                }
                 e.target.blur();
+            });
+
+            document.getElementById('pwm-duty').addEventListener('input', (e) => {
+                pwmDutyCycle = parseInt(e.target.value);
+                document.getElementById('pwm-duty-val').innerText = `${pwmDutyCycle}%`;
             });
 
             document.getElementById('song-select').addEventListener('change', (e) => {
