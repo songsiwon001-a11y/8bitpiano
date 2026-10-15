@@ -47,6 +47,7 @@
                     <option value="ear2">화려한 전기기타</option>
                     <option value="soo">수우우우우우우우</option>
                     <option value="pwm">PWM</option>
+                    <option value="strange">이상한 뇌절 사운드</option>
                 </select>
             </div>
 
@@ -171,6 +172,7 @@
         let ear2Buffer = null;
         let sooBuffer = null;
         let pwmBuffer = null;
+        let strangeBuffer = null;
         let drumBuffer = null;
 
         let currentToneMode = 'bass';
@@ -182,7 +184,6 @@
         let midiAccess = null;
 
         const activeVoices = new Map();
-        const pwmIntervals = new Map();
         const pressedKeyMap = new Map();
 
         const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -309,32 +310,31 @@
         }
 
         async function loadBuffers() {
-            const fetchAndDecode = async (urls) => {
-                const urlList = Array.isArray(urls) ? urls : [urls];
-                for (let u of urlList) {
-                    try {
-                        const res = await fetch(encodeURI(u));
-                        if (!res.ok) continue;
-                        const ab = await res.arrayBuffer();
-                        return await audioCtx.decodeAudioData(ab);
-                    } catch (e) {}
+            const fetchAndDecode = async (url) => {
+                try {
+                    const res = await fetch(encodeURI(url));
+                    if (!res.ok) return null;
+                    const ab = await res.arrayBuffer();
+                    return await audioCtx.decodeAudioData(ab);
+                } catch (e) {
+                    return null;
                 }
-                return null;
             };
 
-            bassBuffer = await fetchAndDecode(['bass_tone.wav', 'bass.wav']);
-            pulseBuffer = await fetchAndDecode(['mane_pulse.wav', 'pulse.wav']);
-            retroBuffer = await fetchAndDecode(['pulse_25%.wav', 'pulse_25%25.wav', 'retro.wav']);
-            retro2Buffer = await fetchAndDecode(['pulse_50%.wav', 'pulse_50%25.wav', 'retro2.wav']);
-            bell1Buffer = await fetchAndDecode(['bell_type_1.wav', 'bell_type_1.mp3']);
-            bell2Buffer = await fetchAndDecode(['bell_type_2.wav', 'bell_type_2.mp3']);
-            musicboxBuffer = await fetchAndDecode(['musicbox.wav', 'musicbox.mp3']);
-            vocalBuffer = await fetchAndDecode(['vocal.wav', 'vocal.mp3']);
-            srjsBuffer = await fetchAndDecode(['srjs synth.wav', 'srjs_synth.wav', 'srjs%20synth.wav']);
-            ear1Buffer = await fetchAndDecode(['pulse_6.25%.wav', 'pulse_6.25%25.wav', 'pulse_6.25.wav']);
-            ear2Buffer = await fetchAndDecode(['short_noise.wav']);
-            sooBuffer = await fetchAndDecode(['soo_tone.mp3', 'soo_tone.wav']);
-            pwmBuffer = await fetchAndDecode(['pwm_signal.wav', 'pwm.wav']);
+            bassBuffer = await fetchAndDecode('bass_tone.wav');
+            pulseBuffer = await fetchAndDecode('mane_pulse.wav');
+            retroBuffer = await fetchAndDecode('pulse_25%.wav');
+            retro2Buffer = await fetchAndDecode('pulse_50%.wav');
+            bell1Buffer = await fetchAndDecode('bell_type_1.wav');
+            bell2Buffer = await fetchAndDecode('bell_type_2.wav');
+            musicboxBuffer = await fetchAndDecode('musicbox.wav');
+            vocalBuffer = await fetchAndDecode('vocal.wav');
+            srjsBuffer = await fetchAndDecode('srjs synth.wav');
+            ear1Buffer = await fetchAndDecode('pulse_6.25%.wav');
+            ear2Buffer = await fetchAndDecode('short_noise.wav');
+            sooBuffer = await fetchAndDecode('soo_tone.mp3');
+            pwmBuffer = await fetchAndDecode('pwm_signal.wav');
+            strangeBuffer = await fetchAndDecode('strange_sound.wav');
             drumBuffer = await fetchAndDecode('drum.wav');
         }
 
@@ -389,6 +389,9 @@
             } else if (mode === 'pwm') {
                 buf = pwmBuffer;
                 baseFreq = 100.0;
+            } else if (mode === 'strange') {
+                buf = strangeBuffer;
+                baseFreq = 36.0;
             }
 
             if (!audioCtx || !buf) return;
@@ -470,10 +473,8 @@
                     try { voice.gain.disconnect(); } catch (e) {}
                 } else if (voice.src && audioCtx) {
                     try {
-                        const now = audioCtx.currentTime;
-                        voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
-                        voice.gain.gain.linearRampToValueAtTime(0.0001, now + 0.01);
-                        voice.src.stop(now + 0.015);
+                        voice.src.stop();
+                        voice.src.disconnect();
                     } catch (e) {}
                 }
                 activeVoices.delete(voiceKey);
@@ -687,7 +688,7 @@
             demoTimeouts = [];
 
             keys88.forEach(k => {
-                ['bass', 'pulse', 'retro', 'retro2', 'bell1', 'bell2', 'musicbox', 'vocal', 'srjs', 'ear1', 'ear2', 'soo', 'pwm'].forEach(mode => {
+                ['bass', 'pulse', 'retro', 'retro2', 'bell1', 'bell2', 'musicbox', 'vocal', 'srjs', 'ear1', 'ear2', 'soo', 'pwm', 'strange'].forEach(mode => {
                     stopNote(k.keyNum, mode);
                 });
             });
